@@ -10,6 +10,9 @@ import de.komoot.photon.query.ReverseRequest;
 import de.komoot.photon.query.SimpleSearchRequest;
 import de.komoot.photon.query.StructuredSearchRequest;
 import de.komoot.photon.searcher.SearchHandler;
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -43,8 +46,10 @@ public class Server {
 
     protected OpenSearchClient client;
     @Nullable private OpenSearchRunner runner = null;
+    private final String indexName;
 
     public Server(PhotonDBConfig config, boolean create) throws IOException {
+        this.indexName = config.getIndexName();
         final File dataDirectory = new File(config.getDataDirectory(), "photon_data");
         if (!create && config.getTransportAddresses().isEmpty()) {
             if (!dataDirectory.isDirectory()) {
@@ -66,23 +71,52 @@ public class Server {
             hosts = startInternal(dataDirectory, config.getCluster());
         } else {
             hosts = config.getTransportAddresses().stream()
-                    .map(addr -> addr.split(":", 2))
-                    .map(parts -> new HttpHost("http", parts[0],
-                        parts.length > 1 ? Integer.parseInt(parts[1]) : 9201))
+                    .map(Server::parseHost)
                     .toArray(HttpHost[]::new);
         }
 
         final var mapper = new JacksonJsonpMapper();
         mapper.objectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-        final var transport = ApacheHttpClient5TransportBuilder
+        final var builder = ApacheHttpClient5TransportBuilder
                 .builder(hosts)
-                .setMapper(mapper)
-                .build();
+                .setMapper(mapper);
 
-        client = new OpenSearchClient(transport);
+        final String login = config.getClusterLogin();
+        final String password = config.getClusterPassword();
+        if (login != null && !login.isEmpty() && password != null) {
+            final var credentialsProvider = new BasicCredentialsProvider();
+            credentialsProvider.setCredentials(
+                    new AuthScope(null, -1),
+                    new UsernamePasswordCredentials(login, password.toCharArray()));
+            builder.setHttpClientConfigCallback(http ->
+                    http.setDefaultCredentialsProvider(credentialsProvider));
+        }
+
+        client = new OpenSearchClient(builder.build());
 
         waitForReady();
+    }
+
+    private static HttpHost parseHost(String addr) {
+        String scheme = "http";
+        int defaultPort = 9201;
+        String rest = addr;
+        if (addr.startsWith("https://")) {
+            scheme = "https";
+            defaultPort = 443;
+            rest = addr.substring("https://".length());
+        } else if (addr.startsWith("http://")) {
+            rest = addr.substring("http://".length());
+            defaultPort = 9200;
+        }
+        // Trim a trailing slash if present
+        if (rest.endsWith("/")) {
+            rest = rest.substring(0, rest.length() - 1);
+        }
+        final String[] parts = rest.split(":", 2);
+        final int port = parts.length > 1 ? Integer.parseInt(parts[1]) : defaultPort;
+        return new HttpHost(scheme, parts[0], port);
     }
 
     private HttpHost[] startInternal(File dataDirectory, String clusterName) {
@@ -111,12 +145,28 @@ public class Server {
     }
 
     public void waitForReady() throws IOException {
-        client.cluster().health(h -> h.waitForStatus(HealthStatus.Yellow));
+        while (true) {
+            try {
+                var response = client.cluster().health(h -> h);
+                if (response.status() == HealthStatus.Yellow || response.status() == HealthStatus.Green) {
+                    return;
+                }
+                LOGGER.info("Waiting for OpenSearch cluster, current status: {}", response.status().jsonValue());
+            } catch (Exception e) {
+                LOGGER.info("Waiting for OpenSearch to become available: {} - {}", e.getClass().getSimpleName(), e.getMessage());
+            }
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted waiting for OpenSearch", ie);
+            }
+        }
     }
 
     public void refreshIndexes() throws IOException {
         waitForReady();
-        client.indices().refresh(r -> r.index(PhotonIndex.NAME));
+        client.indices().refresh(r -> r.index(indexName));
     }
 
     public void shutdown() {
@@ -132,13 +182,13 @@ public class Server {
 
     public void recreateIndex(DatabaseProperties dbProperties) throws IOException {
         // delete any existing data
-        if (client.indices().exists(e -> e.index(PhotonIndex.NAME)).value()) {
-            client.indices().delete(d -> d.index(PhotonIndex.NAME));
+        if (client.indices().exists(e -> e.index(indexName)).value()) {
+            client.indices().delete(d -> d.index(indexName));
         }
 
-        new IndexSettingBuilder().setShards(5).createIndex(client, PhotonIndex.NAME);
+        new IndexSettingBuilder().setShards(5).createIndex(client, indexName);
 
-        new IndexMapping(dbProperties.getReverseOnly()).putMapping(client, PhotonIndex.NAME);
+        new IndexMapping(dbProperties.getReverseOnly()).putMapping(client, indexName);
 
         saveToDatabase(dbProperties);
     }
@@ -151,7 +201,7 @@ public class Server {
         if (dbProperties.getSynonymsInstalled() || synonymFile != null) {
 
             try {
-                (new IndexSettingBuilder()).setSynonymFile(synonymFile).updateIndex(client, PhotonIndex.NAME);
+                (new IndexSettingBuilder()).setSynonymFile(synonymFile).updateIndex(client, indexName);
             } catch (OpenSearchException ex) {
                 closeClientQuietly();
                 throw new UsageException("Could not install synonyms: " + ex.getMessage());
@@ -172,14 +222,14 @@ public class Server {
 
     public void saveToDatabase(DatabaseProperties dbProperties) throws IOException {
         client.indices().putMapping(m -> m
-                .index(PhotonIndex.NAME)
+                .index(indexName)
                 .meta(PhotonIndex.META_DB_PROPERTIES, JsonData.of(dbProperties)));
     }
 
     public DatabaseProperties loadFromDatabase() throws IOException {
         var meta = client.indices()
-                .getMapping(m -> m.index(PhotonIndex.NAME))
-                .get(PhotonIndex.NAME)
+                .getMapping(m -> m.index(indexName))
+                .get(indexName)
                 .mappings()
                 .meta();
 
@@ -194,24 +244,28 @@ public class Server {
 
     public Importer createImporter(DatabaseProperties dbProperties) {
         registerPhotonDocSerializer(dbProperties);
-        return new de.komoot.photon.opensearch.Importer(client);
+        return new de.komoot.photon.opensearch.Importer(client, indexName);
     }
 
     public Updater createUpdater(DatabaseProperties dbProperties) {
         registerPhotonDocSerializer(dbProperties);
-        return new de.komoot.photon.opensearch.Updater(client);
+        return new de.komoot.photon.opensearch.Updater(client, indexName);
     }
 
     public SearchHandler<SimpleSearchRequest> createSearchHandler(int queryTimeoutSec) {
-        return new OpenSearchSearchHandler(client, queryTimeoutSec);
+        return new OpenSearchSearchHandler(client, indexName, queryTimeoutSec);
     }
 
     public SearchHandler<StructuredSearchRequest> createStructuredSearchHandler(int queryTimeoutSec) {
-        return new OpenSearchStructuredSearchHandler(client, queryTimeoutSec);
+        return new OpenSearchStructuredSearchHandler(client, indexName, queryTimeoutSec);
     }
 
     public SearchHandler<ReverseRequest> createReverseHandler(int queryTimeoutSec) {
-        return new OpenSearchReverseHandler(client, queryTimeoutSec);
+        return new OpenSearchReverseHandler(client, indexName, queryTimeoutSec);
+    }
+
+    public String getIndexName() {
+        return indexName;
     }
 
     protected OpenSearchClient getClient() {

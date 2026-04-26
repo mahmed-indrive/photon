@@ -12,9 +12,17 @@ public class PhotonDBConfig {
     public static final String GROUP = "Photon database options";
 
     public PhotonDBConfig(String dataDirectory, String cluster, List<String> transportAddresses) {
+        this(dataDirectory, cluster, transportAddresses, null, null);
+    }
+
+    public PhotonDBConfig(String dataDirectory, String cluster, List<String> transportAddresses,
+                          @org.jspecify.annotations.Nullable String clusterLogin,
+                          @org.jspecify.annotations.Nullable String clusterPassword) {
         this.dataDirectory = dataDirectory;
         this.cluster = cluster;
         this.transportAddresses = transportAddresses;
+        this.clusterLogin = clusterLogin;
+        this.clusterPassword = clusterPassword;
     }
 
     public PhotonDBConfig() {
@@ -36,6 +44,23 @@ public class PhotonDBConfig {
             """)
     private String cluster = "photon";
 
+    @Parameter(names = "-cluster-login", category = GROUP, placeholder = "USER", description = """
+            Username for HTTP basic auth against an external OpenSearch cluster
+            """)
+    @org.jspecify.annotations.Nullable
+    private String clusterLogin = null;
+
+    @Parameter(names = "-cluster-password", category = GROUP, placeholder = "PASSWORD", description = """
+            Password for HTTP basic auth against an external OpenSearch cluster
+            """)
+    @org.jspecify.annotations.Nullable
+    private String clusterPassword = null;
+
+    @Parameter(names = "-index-name", category = GROUP, placeholder = "NAME", description = """
+            Name of the OpenSearch index to read from / write to (default: photon)
+            """)
+    private String indexName = "photon";
+
     public String getDataDirectory() {
         return this.dataDirectory;
     }
@@ -46,5 +71,19 @@ public class PhotonDBConfig {
 
     public List<String> getTransportAddresses() {
         return this.transportAddresses;
+    }
+
+    @org.jspecify.annotations.Nullable
+    public String getClusterLogin() {
+        return this.clusterLogin;
+    }
+
+    @org.jspecify.annotations.Nullable
+    public String getClusterPassword() {
+        return this.clusterPassword;
+    }
+
+    public String getIndexName() {
+        return this.indexName;
     }
 }

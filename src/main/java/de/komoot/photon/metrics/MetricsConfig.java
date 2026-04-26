@@ -30,7 +30,7 @@ public class MetricsConfig {
     private MetricsConfig() {
     }
 
-    private void init(OpenSearchClient client) {
+    private void init(OpenSearchClient client, String indexName) {
         registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
         registry.config().commonTags("application", "Photon");
         registry.config().meterFilter(new MeterFilter() {
@@ -46,7 +46,7 @@ public class MetricsConfig {
             }
         });
         registerJvmMetrics(registry);
-        registerOpenSearchMetrics(registry, client);
+        registerOpenSearchMetrics(registry, client, indexName);
         micrometerPlugin = new MicrometerPlugin(micrometerPluginConfig -> micrometerPluginConfig.registry = registry);
         LOGGER.info("Metrics enabled at " + path);
     }
@@ -61,8 +61,8 @@ public class MetricsConfig {
         new UptimeMetrics().bindTo(registry);
     }
 
-    private void registerOpenSearchMetrics(MeterRegistry registry, OpenSearchClient client) {
-        new OpenSearchMetrics(client).bindTo(registry);
+    private void registerOpenSearchMetrics(MeterRegistry registry, OpenSearchClient client, String indexName) {
+        new OpenSearchMetrics(client, indexName).bindTo(registry);
     }
 
     public MicrometerPlugin getPlugin() {
@@ -87,10 +87,10 @@ public class MetricsConfig {
         return registry != null && micrometerPlugin != null;
     }
 
-    public static MetricsConfig setupMetrics(String metricsType, OpenSearchClient client) {
+    public static MetricsConfig setupMetrics(String metricsType, OpenSearchClient client, String indexName) {
         MetricsConfig metricsConfig = new MetricsConfig();
         if ("prometheus".equalsIgnoreCase(metricsType)) {
-            metricsConfig.init(client);
+            metricsConfig.init(client, indexName);
         }
         return metricsConfig;
     }

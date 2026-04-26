@@ -1,6 +1,5 @@
 package de.komoot.photon.metrics;
 
-import de.komoot.photon.opensearch.PhotonIndex;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
@@ -17,10 +16,12 @@ public class OpenSearchMetrics implements MeterBinder {
     private static final long CACHE_TTL_MS = 30_000;
 
     private final OpenSearchClient client;
+    private final String indexName;
     @Nullable private volatile CachedStats cache;
 
-    public OpenSearchMetrics(OpenSearchClient client) {
+    public OpenSearchMetrics(OpenSearchClient client, String indexName) {
         this.client = client;
+        this.indexName = indexName;
     }
 
     private record CachedStats(
@@ -45,17 +46,17 @@ public class OpenSearchMetrics implements MeterBinder {
     @Override
     public void bindTo(MeterRegistry registry) {
         Gauge.builder("opensearch.documents.count", client, this::getDocumentCount)
-                .tag("index", PhotonIndex.NAME).register(registry);
+                .tag("index", indexName).register(registry);
         Gauge.builder("opensearch.index.size.bytes", client, this::getIndexSizeBytes)
-                .tag("index", PhotonIndex.NAME).baseUnit("bytes").register(registry);
+                .tag("index", indexName).baseUnit("bytes").register(registry);
         Gauge.builder("opensearch.search", client, this::getSearchTotal)
-                .tag("index", PhotonIndex.NAME).register(registry);
+                .tag("index", indexName).register(registry);
         Gauge.builder("opensearch.search.time.millis", client, this::getSearchTimeMillis)
-                .tag("index", PhotonIndex.NAME).baseUnit("milliseconds").register(registry);
+                .tag("index", indexName).baseUnit("milliseconds").register(registry);
         Gauge.builder("opensearch.indexing", client, this::getIndexingTotal)
-                .tag("index", PhotonIndex.NAME).register(registry);
+                .tag("index", indexName).register(registry);
         Gauge.builder("opensearch.indexing.time.millis", client, this::getIndexingTimeMillis)
-                .tag("index", PhotonIndex.NAME).baseUnit("milliseconds").register(registry);
+                .tag("index", indexName).baseUnit("milliseconds").register(registry);
         Gauge.builder("opensearch.cluster.shards.active", client, this::getActiveShards).register(registry);
         Gauge.builder("opensearch.cluster.shards.relocating", client, this::getRelocatingShards).register(registry);
         Gauge.builder("opensearch.cluster.shards.unassigned", client, this::getUnassignedShards).register(registry);
@@ -86,8 +87,8 @@ public class OpenSearchMetrics implements MeterBinder {
         double unassignedShards = 0, healthStatus = 0;
 
         try {
-            documentCount = client.count(c -> c.index(PhotonIndex.NAME)).count();
-            var stats = client.indices().stats(s -> s.index(PhotonIndex.NAME)).indices().get(PhotonIndex.NAME);
+            documentCount = client.count(c -> c.index(indexName)).count();
+            var stats = client.indices().stats(s -> s.index(indexName)).indices().get(indexName);
             if (stats != null) {
                 if (stats.primaries().store() != null) {
                     indexSizeBytes = stats.primaries().store().sizeInBytes();

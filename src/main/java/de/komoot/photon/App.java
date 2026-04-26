@@ -328,7 +328,7 @@ public class App {
                          Support Geometries: {}""",
                 dbProperties.getLanguages(), dbProperties.getImportDate(), dbProperties.getSupportGeometries());
 
-        MetricsConfig metrics = setupMetrics(args.getMetrics(), server.getClient());
+        MetricsConfig metrics = setupMetrics(args.getMetrics(), server.getClient(), server.getIndexName());
         final var formatter = new GeoJsonFormatter();
 
         photonServer = Javalin.create(config -> {

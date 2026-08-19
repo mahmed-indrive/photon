@@ -12,6 +12,8 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-COPY --from=builder /src/target/photon-1.1.0.jar /app/photon.jar
+# Glob avoids re-pinning the version here on every release; shade leaves exactly
+# one photon-<version>.jar in target/ (the unshaded one is original-photon-*.jar).
+COPY --from=builder /src/target/photon-*.jar /app/photon.jar
 
 ENTRYPOINT ["java", "-jar", "/app/photon.jar"]

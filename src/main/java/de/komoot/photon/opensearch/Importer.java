@@ -15,12 +15,14 @@ public class Importer implements de.komoot.photon.Importer {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private final OpenSearchClient client;
+    private final String indexName;
     private BulkRequest.Builder bulkRequest = new BulkRequest.Builder();
     private int todoDocuments = 0;
     private boolean hasPrintedNoUpdates = false;
 
-    public Importer(OpenSearchClient client) {
+    public Importer(OpenSearchClient client, String indexName) {
         this.client = client;
+        this.indexName = indexName;
     }
 
     @Override
@@ -38,13 +40,13 @@ public class Importer implements de.komoot.photon.Importer {
                 }
                 bulkRequest.operations(op -> op
                         .create(i -> i
-                                .index(PhotonIndex.NAME)
+                                .index(indexName)
                                 .document(doc)));
             } else {
                 final String uuid = PhotonDoc.makeUid(placeID, objectId++);
                 bulkRequest.operations(op -> op
                         .create(i -> i
-                                .index(PhotonIndex.NAME)
+                                .index(indexName)
                                 .id(uuid)
                                 .document(doc)));
             }
@@ -63,7 +65,7 @@ public class Importer implements de.komoot.photon.Importer {
         }
 
         try {
-            client.indices().refresh(r -> r.index(PhotonIndex.NAME));
+            client.indices().refresh(r -> r.index(indexName));
         } catch (IOException e) {
             LOGGER.warn("Refresh of database failed", e);
         }

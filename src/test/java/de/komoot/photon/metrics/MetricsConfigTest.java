@@ -12,7 +12,7 @@ class MetricsConfigTest {
     void testInit() {
         OpenSearchClient openSearchClient = new OpenSearchClient(null) {};
 
-        MetricsConfig metricsConfig = MetricsConfig.setupMetrics("prometheus", openSearchClient);
+        MetricsConfig metricsConfig = MetricsConfig.setupMetrics("prometheus", openSearchClient, "photon");
         assertNotNull(metricsConfig.getRegistry());
         assertNotNull(metricsConfig.getPlugin());
         assertTrue(metricsConfig.isEnabled());
@@ -23,7 +23,7 @@ class MetricsConfigTest {
     void testNoInit(String metricsType) {
         OpenSearchClient openSearchClient = new OpenSearchClient(null) {};
 
-        MetricsConfig metricsConfig = MetricsConfig.setupMetrics(metricsType, openSearchClient);
+        MetricsConfig metricsConfig = MetricsConfig.setupMetrics(metricsType, openSearchClient, "photon");
         assertThrows(IllegalStateException.class, metricsConfig::getRegistry);
         assertThrows(IllegalStateException.class, metricsConfig::getPlugin);
         assertFalse(metricsConfig.isEnabled());

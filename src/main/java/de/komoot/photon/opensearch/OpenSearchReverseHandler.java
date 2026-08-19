@@ -18,10 +18,12 @@ import java.util.stream.Stream;
 @NullMarked
 public class OpenSearchReverseHandler implements SearchHandler<ReverseRequest> {
     private final OpenSearchClient client;
+    private final String indexName;
     private final String queryTimeout;
 
-    public OpenSearchReverseHandler(OpenSearchClient client, int queryTimeoutSec) {
+    public OpenSearchReverseHandler(OpenSearchClient client, String indexName, int queryTimeoutSec) {
         this.client = client;
+        this.indexName = indexName;
         queryTimeout = queryTimeoutSec + "s";
     }
 
@@ -50,7 +52,7 @@ public class OpenSearchReverseHandler implements SearchHandler<ReverseRequest> {
     private SearchResponse<OpenSearchResult> search(Query query, int limit, @Nullable Point location) {
         try {
             return client.search(s -> {
-                s.index(PhotonIndex.NAME)
+                s.index(indexName)
                         .searchType(SearchType.QueryThenFetch)
                         .query(query)
                         .size(limit)

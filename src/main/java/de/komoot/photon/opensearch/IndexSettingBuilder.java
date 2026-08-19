@@ -37,6 +37,7 @@ public class IndexSettingBuilder {
                 .index(indexName)
                 .settings(s -> s
                         .numberOfShards(numShards)
+                        .numberOfReplicas(0)
                         .analysis(settings.build())));
     }
 

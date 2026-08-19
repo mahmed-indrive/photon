@@ -19,10 +19,12 @@ public class OpenSearchSearchHandler implements SearchHandler<SimpleSearchReques
     private static final float IMPORTANCE_FACTOR = 30f;
     private static final double NEG_DECAY_FACTOR = Math.log(0.5);
     private final OpenSearchClient client;
+    private final String indexName;
     private final String queryTimeout;
 
-    public OpenSearchSearchHandler(OpenSearchClient client, int queryTimeout) {
+    public OpenSearchSearchHandler(OpenSearchClient client, String indexName, int queryTimeout) {
         this.client = client;
+        this.indexName = indexName;
         this.queryTimeout = queryTimeout + "s";
     }
 
@@ -96,7 +98,7 @@ public class OpenSearchSearchHandler implements SearchHandler<SimpleSearchReques
     private SearchResponse<OpenSearchResult> sendQuery(Query query, int limit) {
         try {
             return client.search(s -> s
-                    .index(PhotonIndex.NAME)
+                    .index(indexName)
                     .searchType(SearchType.QueryThenFetch)
                     .query(query)
                     .size(limit)

@@ -2,7 +2,6 @@ package de.komoot.photon;
 
 import de.komoot.photon.config.PhotonDBConfig;
 import de.komoot.photon.opensearch.OpenSearchResult;
-import de.komoot.photon.opensearch.PhotonIndex;
 import de.komoot.photon.searcher.PhotonResult;
 import org.codelibs.opensearch.runner.OpenSearchRunner;
 import org.opensearch.client.opensearch.core.search.Hit;
@@ -88,7 +87,7 @@ public class TestServer {
     public PhotonResult getByID(String id) {
         try {
             final var response = testServer.getClient().get(fn -> fn
-                    .index(PhotonIndex.NAME)
+                    .index(testServer.getIndexName())
                     .id(id), OpenSearchResult.class);
 
             if (response.found()) {

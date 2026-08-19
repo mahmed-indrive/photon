@@ -14,11 +14,13 @@ public class Updater implements de.komoot.photon.Updater {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private final OpenSearchClient client;
+    private final String indexName;
     private BulkRequest.Builder bulkRequest = new BulkRequest.Builder();
     private int todoDocuments = 0;
 
-    public Updater(OpenSearchClient client) {
+    public Updater(OpenSearchClient client, String indexName) {
         this.client = client;
+        this.indexName = indexName;
     }
 
     public void addOrUpdate(Iterable<PhotonDoc> docs) {
@@ -35,7 +37,7 @@ public class Updater implements de.komoot.photon.Updater {
             final String uid = PhotonDoc.makeUid(placeID, objectId++);
 
             bulkRequest.operations(op -> op
-                    .index(i -> i.index(PhotonIndex.NAME).id(uid).document(doc)));
+                    .index(i -> i.index(indexName).id(uid).document(doc)));
 
             if (++todoDocuments > 10000) {
                 updateDocuments();
@@ -57,7 +59,7 @@ public class Updater implements de.komoot.photon.Updater {
         while (exists(docId, objectId++)) {
             final String uid = PhotonDoc.makeUid(docId, objectId);
             bulkRequest.operations(op -> op
-                    .delete(d -> d.index(PhotonIndex.NAME).id(uid)));
+                    .delete(d -> d.index(indexName).id(uid)));
 
             if (++todoDocuments > 10000) {
                 updateDocuments();
@@ -67,7 +69,7 @@ public class Updater implements de.komoot.photon.Updater {
 
     private boolean exists(String docId, int objectId) {
         try {
-            return client.exists(e -> e.index(PhotonIndex.NAME).id(PhotonDoc.makeUid(docId, objectId))).value();
+            return client.exists(e -> e.index(indexName).id(PhotonDoc.makeUid(docId, objectId))).value();
         } catch (IOException e) {
             LOGGER.warn("IO error on exists operation", e);
         }
@@ -78,7 +80,7 @@ public class Updater implements de.komoot.photon.Updater {
     public void finish() {
         updateDocuments();
         try {
-            client.indices().refresh(r -> r.index(PhotonIndex.NAME));
+            client.indices().refresh(r -> r.index(indexName));
         } catch (IOException e) {
             LOGGER.warn("IO error on refresh.");
         }

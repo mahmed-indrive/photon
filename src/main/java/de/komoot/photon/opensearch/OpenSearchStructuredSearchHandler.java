@@ -22,10 +22,12 @@ public class OpenSearchStructuredSearchHandler implements SearchHandler<Structur
     private static final float LOCATION_BIAS_FACTOR = 30f;
     private static final double NEG_DECAY_FACTOR = Math.log(0.5);
     private final OpenSearchClient client;
+    private final String indexName;
     private final String queryTimeout;
 
-    public OpenSearchStructuredSearchHandler(OpenSearchClient client, int queryTimeoutSec) {
+    public OpenSearchStructuredSearchHandler(OpenSearchClient client, String indexName, int queryTimeoutSec) {
         this.client = client;
+        this.indexName = indexName;
         queryTimeout = queryTimeoutSec + "s";
     }
 
@@ -103,7 +105,7 @@ public class OpenSearchStructuredSearchHandler implements SearchHandler<Structur
     private SearchResponse<OpenSearchResult> sendQuery(Query query, Integer limit) {
         try {
             return client.search(s -> s
-                    .index(PhotonIndex.NAME)
+                    .index(indexName)
                     .searchType(SearchType.QueryThenFetch)
                     .query(query)
                     .size(limit)

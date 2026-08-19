@@ -10,6 +10,8 @@
     </Appenders>
     <Loggers>
         <Logger name="de.komoot.photon" level="info"/>
+        <Logger name="org.opensearch" level="info"/>
+        <Logger name="org.opensearch.client" level="info"/>
         <Root level="warn">
             <AppenderRef ref="ASYNC" />
         </Root>

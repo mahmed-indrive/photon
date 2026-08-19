@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.3.0] - 2026-08-07
+
+* scale down importance of lower ranked places when importing from Nominatim
+* tweak rematching algorithm to give name match larger weight
+* improve exporting of streetnumber addresses to match usage (thanks @barasoukup)
+* export admin_level tag from Nominatim into extratags
+* improve searchability of postcodes with optional spaces and dashes
+* switch Nominatim export to use computed postcode instead of addr:postcode
+* fix missing HTTP request-latency histogram buckets in Prometheus metrics
+  (thanks @henrik242)
+
+## [1.2.1] - 2026-06-30
+
+* fix "Request Entity Too Large" error on import with geometry (thanks @henrik242)
+
+## [1.2.0] - 2026-06-11
+
+* fix NPE in imports with country filter enabled
+* improve search of partial exact matches (thanks @henrik242)
+* improve import pipeline, now fully supporting parallel processing (thanks @henrik242)
+* improve handling of words with apostrophes (thanks @henrik242)
+* fall back to '-default-language' for display names when requested
+  language is not available (thanks @tjvanderende)
+* documentation improvements (thanks @romanpickl)
+
 ## [1.1.0] - 2026-04-18
 
 * add special reverse-only mode creating a smaller DB with on search capability

@@ -243,8 +243,18 @@ public class Server {
     }
 
     public Importer createImporter(DatabaseProperties dbProperties) {
+        // Tests use this path and drive refresh() explicitly; don't tune refresh_interval,
+        // or the explicit refresh() calls would no-op against refresh_interval=-1.
+        return createImporter(dbProperties, 1, false);
+    }
+
+    public Importer createImporter(DatabaseProperties dbProperties, int maxConcurrentRequests) {
+        return createImporter(dbProperties, maxConcurrentRequests, true);
+    }
+
+    private Importer createImporter(DatabaseProperties dbProperties, int maxConcurrentRequests, boolean tuneRefresh) {
         registerPhotonDocSerializer(dbProperties);
-        return new de.komoot.photon.opensearch.Importer(client, indexName);
+        return new de.komoot.photon.opensearch.Importer(client, indexName, maxConcurrentRequests, tuneRefresh);
     }
 
     public Updater createUpdater(DatabaseProperties dbProperties) {

@@ -386,6 +386,46 @@ class NominatimConnectorDBTest {
                                 AddressType.COUNTRY, COUNTRY_NAMES
                         )));
     }
+
+    /**
+     * When the combined housenumber is tagged as well, then the street address uses the
+     * combined form while the place address keeps the conscription number.
+     */
+    @Test
+    void testObjectWithConscriptionNumberAndHousenumber() {
+        PlacexTestRow parent = PlacexTestRow.make_street("Main St").add(jdbc);
+        PlacexTestRow place = new PlacexTestRow("building", "yes")
+                .addr("housenumber", "99521/34")
+                .addr("streetnumber", "34")
+                .addr("conscriptionnumber", "99521")
+                .addr("place", "Village")
+                .addr("street", "Main St")
+                .parent(parent).add(jdbc);
+
+        place.addAddresslines(jdbc,
+                parent,
+                new PlacexTestRow("place", "city").name("Grand Central").ranks(16).add(jdbc));
+
+        readEntireDatabase();
+
+        importer.assertThatAllByRow(place)
+                .hasSize(2)
+                .anySatisfy(d -> assertThat(d)
+                        .hasFieldOrPropertyWithValue("houseNumber", "99521/34")
+                        .hasFieldOrPropertyWithValue("addressParts", Map.of(
+                                AddressType.STREET, Map.of("default", "Main St"),
+                                AddressType.CITY, Map.of("default", "Grand Central"),
+                                AddressType.COUNTRY, COUNTRY_NAMES
+                        )))
+                .anySatisfy(d -> assertThat(d)
+                        .hasFieldOrPropertyWithValue("houseNumber", "99521")
+                        .hasFieldOrPropertyWithValue("addressParts", Map.of(
+                                AddressType.STREET, Map.of("default", "Village"),
+                                AddressType.CITY, Map.of("default", "Grand Central"),
+                                AddressType.COUNTRY, COUNTRY_NAMES
+                        )));
+    }
+
     /**
      * Unnamed objects are ignored when they do not have a housenumber.
      */
@@ -438,12 +478,12 @@ class NominatimConnectorDBTest {
     }
 
     @Test
-    void testPreferPostcodeFromAddress() {
+    void testPreferPostcodeFromPostcodeField() {
         PlacexTestRow parent = PlacexTestRow.make_street("Main St").add(jdbc);
         PlacexTestRow place = new PlacexTestRow("building", "yes")
                 .addr("housenumber", "34")
-                .addr("postcode", "45-234")
-                .postcode("XXX")
+                .addr("postcode", "XXX")
+                .postcode("45-234")
                 .parent(parent).add(jdbc);
         PlacexTestRow postcode = new PlacexTestRow("boundary", "postal_code")
                 .name("ref", "1234XZ").ranks(11).add(jdbc);
@@ -494,6 +534,82 @@ class NominatimConnectorDBTest {
                         AddressType.CITY, Map.of("default", "Rio"),
                         AddressType.COUNTRY, Map.of("default", "USA", "en", "United States")
                 ));
+
+    }
+
+    @Test
+    void testPostcodeWithSpaces() {
+        var parent = new PlacexTestRow("place", "city").name("Rio")
+                .ranks(16)
+                .country("nl")
+                .add(jdbc);
+        var postcode = new PostcodeLocationTestRow("33XV 46", "nl")
+                .geometry("POLYGON((-10.999 33.999, -11.001 34.001, -11.001 33.999, -10.999 33.999))")
+                .centroid(-11, 34)
+                .relation(55)
+                .parent(parent.getPlaceId())
+                .add(jdbc);
+
+        readEntireDatabase();
+
+        importer.assertThatByPlaceId(postcode.getPlaceString())
+                .hasFieldOrPropertyWithValue("osmId", 55L)
+                .hasFieldOrPropertyWithValue("tagKey", "place")
+                .hasFieldOrPropertyWithValue("tagValue", "postcode")
+                .hasFieldOrPropertyWithValue("postcode", null)
+                .hasFieldOrPropertyWithValue("name", Map.of(
+                        "default", "33XV 46",
+                        "alt", "33XV46"))
+                ;
+
+    }
+
+    @Test
+    void testBoundariesHaveAdminLevelInExtraTags() {
+        var place = new PlacexTestRow("boundary", "administrative").name("Rio")
+                .ranks(16)
+                .country("us")
+                .admin_level(8)
+                .add(jdbc);
+
+        readEntireDatabase();
+
+        importer.assertThatByPlaceId(place.getPlaceString())
+                .hasFieldOrPropertyWithValue("extratags", Map.of("admin_level", "8"));
+
+    }
+
+    @Test
+    void testBoundariesHaveAdminLevelInExtraTagsWithExisting() {
+        var place = new PlacexTestRow("boundary", "administrative").name("Rio")
+                .ranks(16)
+                .country("us")
+                .admin_level(8)
+                .extraTag("foo", "bar")
+                .add(jdbc);
+
+        readEntireDatabase();
+
+        importer.assertThatByPlaceId(place.getPlaceString())
+                .hasFieldOrPropertyWithValue("extratags", Map.of(
+                        "admin_level", "8",
+                        "foo", "bar"));
+
+    }
+
+    @Test
+    void testBAdminLevelOfNonBoundariesIsIgnored() {
+        var place = new PlacexTestRow("boundary", "something").name("Rio")
+                .ranks(16)
+                .country("us")
+                .admin_level(8)
+                .extraTag("foo", "bar")
+                .add(jdbc);
+
+        readEntireDatabase();
+
+        importer.assertThatByPlaceId(place.getPlaceString())
+                .hasFieldOrPropertyWithValue("extratags", Map.of("foo", "bar"));
 
     }
 }

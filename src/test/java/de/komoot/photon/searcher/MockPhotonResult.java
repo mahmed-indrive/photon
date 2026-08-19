@@ -2,6 +2,7 @@ package de.komoot.photon.searcher;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.komoot.photon.opensearch.DocFields;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -15,9 +16,16 @@ public class MockPhotonResult implements PhotonResult {
     final double[] coordinates = new double[]{42, 21};
     final double[] extent = new double[]{0, 1, 2, 3};
     final Map<String, String> localized = new HashMap<>();
+    double importance = 0.5;
     double score = 0.0;
 
     ObjectMapper mapper = new ObjectMapper();
+
+    public MockPhotonResult() {}
+
+    public MockPhotonResult(double importance) {
+        this.importance = importance;
+    }
 
     @Override
     public double getScore() {
@@ -37,13 +45,39 @@ public class MockPhotonResult implements PhotonResult {
 
     @Override
     public double getImportance() {
-        return 0.5;
+        return importance;
     }
 
     @Override
     @Nullable
     public String getLocalised(String key, String language, String... altNames) {
-        return localized.get(key + "||" + language);
+        return getLocalisedWithFallback(key, language, null, altNames);
+    }
+
+    @Override
+    @Nullable
+    public String getLocalisedWithFallback(String key, String language, @Nullable String fallbackLanguage, String... altNames) {
+        var name = localized.get(key + "||" + language);
+        if (name != null) {
+            return name;
+        }
+        if (fallbackLanguage != null && !fallbackLanguage.equals(language)) {
+            name = localized.get(key + "||" + fallbackLanguage);
+            if (name != null) {
+                return name;
+            }
+        }
+        name = localized.get(key + "||default");
+        if (name != null) {
+            return name;
+        }
+        for (var nameKey : altNames) {
+            name = localized.get(key + "||" + nameKey);
+            if (name != null) {
+                return name;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -66,6 +100,11 @@ public class MockPhotonResult implements PhotonResult {
         return this;
     }
 
+    public MockPhotonResult putName(String lang, String value) {
+        putLocalized(DocFields.NAME, lang, value);
+        return this;
+    }
+
     public MockPhotonResult putLocalized(String key, String lang, String value) {
         localized.put(key + "||" + lang, value);
         return this;
@@ -79,4 +118,5 @@ public class MockPhotonResult implements PhotonResult {
         }
         return this;
     }
+
 }

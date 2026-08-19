@@ -35,13 +35,20 @@ public class PlaceRowMapper implements RowMapper<PhotonDoc> {
     public PhotonDoc mapRow(ResultSet rs, int rowNum) throws SQLException {
         String osmKey = rs.getString("class");
         String osmValue = rs.getString("type");
+
+        var extratags = dbutils.getMap(rs, "extratags");
+
+        if ("boundary".equals(osmKey) && "administrative".equals(osmValue)) {
+            extratags = new HashMap<>(extratags); // make a mutable copy
+            extratags.put("admin_level", String.valueOf(rs.getInt("admin_level")));
+        }
+
         if (!CATEGORY_PATTERN.matcher(osmKey).matches()) {
             osmKey = "place";
             osmValue = "yes";
         } else if (!CATEGORY_PATTERN.matcher(osmValue).matches()) {
             osmValue = "yes";
         }
-        var extratags = dbutils.getMap(rs, "extratags");
         String place = extratags.get("place");
         if (place == null) {
             place = extratags.get("linked_place");
@@ -62,8 +69,7 @@ public class PlaceRowMapper implements RowMapper<PhotonDoc> {
                 .bbox(dbutils.extractGeometry(rs, "bbox"))
                 .countryCode(rs.getString("country_code"))
                 .centroid(Objects.requireNonNull(dbutils.extractGeometry(rs, "centroid")))
-                .addressType(addressType)
-                .postcode(rs.getString("postcode"));
+                .addressType(addressType);
 
         if (useGeometryColumn) {
             try {
@@ -74,15 +80,33 @@ public class PlaceRowMapper implements RowMapper<PhotonDoc> {
         }
 
         double importance = rs.getDouble("importance");
-        doc.importance(rs.wasNull() ? (0.40001 - rs.getInt("rank_search") / 75d) : importance);
+        if (rs.wasNull()) {
+            int rank = rs.getInt("rank_search");
+            doc.importance(0.40001 - rank / 75d);
+        } else if (importance < 0.4) {
+            doc.importance(importance);
+        } else {
+            // Nominatim has relatively large importances for POIs of
+            // headquarters of organisations. This scales the importance
+            // by search rank to reduce the influence.
+            int rank = rs.getInt("rank_search");
+            double limit = 0.4 + 0.6 * (1 - rank / 30d);
+            if (importance > limit) {
+                doc.importance(limit + (importance - limit) / 2);
+            } else {
+                doc.importance(importance);
+            }
+        }
 
         return doc;
     }
 
     public String makeBaseSelect() {
-        var sql = "SELECT p.place_id, p.osm_type, p.osm_id, p.class, p.type, p.name, p.postcode," +
-                "       p.address, p.extratags, ST_Envelope(p.geometry) AS bbox," +
-                "       p.rank_address, p.rank_search, p.importance, p.country_code, p.centroid, " +
+        var sql = """
+                SELECT p.place_id, p.osm_type, p.osm_id, p.class, p.type, p.name, p.postcode,
+                       p.address, p.extratags, p.admin_level, ST_Envelope(p.geometry) AS bbox,
+                       p.rank_address, p.rank_search, p.importance, p.country_code, p.centroid,
+                """ +
                 dbutils.jsonArrayFromSelect(
                         "address_place_id",
                         "FROM place_addressline pa " +

@@ -78,9 +78,11 @@ public class Server {
         final var mapper = new JacksonJsonpMapper();
         mapper.objectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+        // Gzip request bodies for external clusters, remote bulk imports are bound by uplink bandwidth
         final var builder = ApacheHttpClient5TransportBuilder
                 .builder(hosts)
-                .setMapper(mapper);
+                .setMapper(mapper)
+                .setCompressionEnabled(!config.getTransportAddresses().isEmpty());
 
         final String login = config.getClusterLogin();
         final String password = config.getClusterPassword();
